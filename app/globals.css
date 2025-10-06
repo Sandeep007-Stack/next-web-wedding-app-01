@@ -1,0 +1,12 @@
+/* Global styles */
+html, body, #__next {
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --radius: 8px;
+}
