@@ -7,9 +7,11 @@ import { Drawer, List, ListItemButton, ListItemIcon, ListItemText, Toolbar } fro
 import { useLayoutStore } from '@/store/layoutStore';
 import EventIcon from '@mui/icons-material/Event';
 import SettingsIcon from '@mui/icons-material/Settings';
+import PeopleIcon from '@mui/icons-material/People';
 
 const nav = [
   { href: '/dashboard/events', label: 'Events', icon: <EventIcon /> },
+  { href: '/dashboard/rsvps', label: 'RSVPs', icon: <PeopleIcon /> },
   { href: '/dashboard/settings', label: 'Settings', icon: <SettingsIcon /> },
 ];
 
