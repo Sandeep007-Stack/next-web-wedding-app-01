@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from 'zustand';
-import { subscribeWithSelector, persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { 
   SiteSection, 
   SiteTheme, 
@@ -56,6 +56,10 @@ const createSnapshot = (state: SiteBuilderState): SiteBuilderSnapshot => ({
   theme: JSON.parse(JSON.stringify(state.theme)),
   timestamp: new Date(),
 });
+
+// Debounce helper
+let historyTimeoutId: NodeJS.Timeout | null = null;
+let themeTimeoutId: NodeJS.Timeout | null = null;
 
 const initialState: SiteBuilderState = {
   sections: [],
@@ -148,7 +152,11 @@ export const useSiteBuilderStore = create<SiteBuilderStore>()(
           ),
         }));
         // Debounce history push for data updates
-        setTimeout(() => get().pushToHistory(), 300);
+        if (historyTimeoutId) clearTimeout(historyTimeoutId);
+        historyTimeoutId = setTimeout(() => {
+          get().pushToHistory();
+          historyTimeoutId = null;
+        }, 300);
       },
       
       reorderSections: (fromIndex: number, toIndex: number) => {
@@ -195,7 +203,11 @@ export const useSiteBuilderStore = create<SiteBuilderStore>()(
           theme: { ...state.theme, ...updates },
         }));
         // Debounce history push for theme updates
-        setTimeout(() => get().pushToHistory(), 150);
+        if (themeTimeoutId) clearTimeout(themeTimeoutId);
+        themeTimeoutId = setTimeout(() => {
+          get().pushToHistory();
+          themeTimeoutId = null;
+        }, 150);
       },
       
       updateThemeColors: (colors: Partial<SiteTheme['colors']>) => {
@@ -206,7 +218,11 @@ export const useSiteBuilderStore = create<SiteBuilderStore>()(
             colors: { ...state.theme.colors, ...colors },
           },
         }));
-        setTimeout(() => get().pushToHistory(), 150);
+        if (themeTimeoutId) clearTimeout(themeTimeoutId);
+        themeTimeoutId = setTimeout(() => {
+          get().pushToHistory();
+          themeTimeoutId = null;
+        }, 150);
       },
       
       updateThemeTypography: (typography: Partial<SiteTheme['typography']>) => {
@@ -217,7 +233,11 @@ export const useSiteBuilderStore = create<SiteBuilderStore>()(
             typography: { ...state.theme.typography, ...typography },
           },
         }));
-        setTimeout(() => get().pushToHistory(), 150);
+        if (themeTimeoutId) clearTimeout(themeTimeoutId);
+        themeTimeoutId = setTimeout(() => {
+          get().pushToHistory();
+          themeTimeoutId = null;
+        }, 150);
       },
       
       // Device preset

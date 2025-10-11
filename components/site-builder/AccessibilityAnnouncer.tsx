@@ -6,23 +6,20 @@ import { useSiteBuilderStore } from '@/store/siteBuilderStore';
 
 export function AccessibilityAnnouncer() {
   const [announcement, setAnnouncement] = useState('');
+  const [prevSectionCount, setPrevSectionCount] = useState(0);
   const { sections } = useSiteBuilderStore();
 
   useEffect(() => {
-    // Listen for section changes and announce them
-    const prevSectionsRef = { current: sections };
-    
-    if (prevSectionsRef.current.length !== sections.length) {
-      if (sections.length > prevSectionsRef.current.length) {
+    if (prevSectionCount !== sections.length) {
+      if (sections.length > prevSectionCount && sections.length > 0) {
         const newSection = sections[sections.length - 1];
         setAnnouncement(`Added ${newSection.kind} section: ${newSection.name}`);
-      } else {
+      } else if (sections.length < prevSectionCount) {
         setAnnouncement('Section removed');
       }
+      setPrevSectionCount(sections.length);
     }
-
-    prevSectionsRef.current = sections;
-  }, [sections]);
+  }, [sections.length, prevSectionCount, sections]);
 
   useEffect(() => {
     if (announcement) {

@@ -155,7 +155,7 @@ function SortableSectionItem({
           {section.visible ? <VisibilityIcon /> : <VisibilityOffIcon />}
         </IconButton>
 
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {isRenaming ? (
             <TextField
               value={renameValue}
@@ -172,6 +172,7 @@ function SortableSectionItem({
             <>
               <Typography
                 variant="body2"
+                component="div"
                 fontWeight={500}
                 sx={{
                   overflow: 'hidden',
@@ -185,12 +186,14 @@ function SortableSectionItem({
               >
                 {section.name}
               </Typography>
-              <Chip
-                label={section.kind}
-                size="small"
-                variant="outlined"
-                sx={{ mt: 0.5, fontSize: '0.75rem', height: 20 }}
-              />
+              <Box sx={{ mt: 0.5 }}>
+                <Chip
+                  label={section.kind}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.75rem', height: 20 }}
+                />
+              </Box>
             </>
           )}
         </Box>
