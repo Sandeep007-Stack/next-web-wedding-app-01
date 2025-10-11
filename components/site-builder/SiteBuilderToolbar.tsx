@@ -2,39 +2,45 @@
 
 import {
   AppBar,
-  Box,
-  Button,
-  Divider,
-  IconButton,
-  Stack,
   Toolbar,
   Typography,
-  useMediaQuery,
-  useTheme,
+  IconButton,
+  Button,
+  Divider,
+  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Tooltip,
 } from '@mui/material';
 import {
   Undo as UndoIcon,
   Redo as RedoIcon,
   Save as SaveIcon,
-  Refresh as ResetIcon,
+  RestoreFromTrash as ResetIcon,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
 import { useState } from 'react';
 import { useSiteBuilderStore } from '@/store/siteBuilderStore';
-import { ConfirmDialog } from './ConfirmDialog';
 
-export function SiteBuilderToolbar() {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+interface SiteBuilderToolbarProps {
+  onToggleSidebar?: () => void;
+}
+
+export function SiteBuilderToolbar({ onToggleSidebar }: SiteBuilderToolbarProps) {
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   
-  const [showResetDialog, setShowResetDialog] = useState(false);
-  
-  const lastSaved = useSiteBuilderStore((s) => s.lastSaved);
-  const canUndo = useSiteBuilderStore((s) => s.canUndo());
-  const canRedo = useSiteBuilderStore((s) => s.canRedo());
-  const undo = useSiteBuilderStore((s) => s.undo);
-  const redo = useSiteBuilderStore((s) => s.redo);
-  const save = useSiteBuilderStore((s) => s.save);
-  const reset = useSiteBuilderStore((s) => s.reset);
+  const {
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    save,
+    reset,
+    lastSaved,
+  } = useSiteBuilderStore();
 
   const handleSave = () => {
     save();
@@ -42,117 +48,133 @@ export function SiteBuilderToolbar() {
 
   const handleReset = () => {
     reset();
-    setShowResetDialog(false);
+    setResetDialogOpen(false);
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'z' && !event.shiftKey) {
-      event.preventDefault();
-      if (canUndo) undo();
-    } else if ((event.metaKey || event.ctrlKey) && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
-      event.preventDefault();
-      if (canRedo) redo();
-    } else if ((event.metaKey || event.ctrlKey) && event.key === 's') {
-      event.preventDefault();
-      handleSave();
-    }
+  const formatLastSaved = (date: Date | null) => {
+    if (!date) return '';
+    return `Last saved • ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
   return (
     <>
       <AppBar 
-        position="sticky" 
-        elevation={1}
+        position="static" 
         sx={{ 
+          zIndex: (theme) => theme.zIndex.drawer + 1,
           bgcolor: 'background.paper',
           color: 'text.primary',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
+          boxShadow: 1,
         }}
-        onKeyDown={handleKeyDown}
+        data-testid="site-builder-toolbar"
       >
-        <Toolbar sx={{ minHeight: 64 }}>
-          <Typography 
-            variant="h6" 
-            fontWeight={700}
-            sx={{ 
-              flexGrow: isMobile ? 0 : 1,
-              mr: isMobile ? 2 : 0,
-            }}
-          >
+        <Toolbar>
+          {onToggleSidebar && (
+            <IconButton
+              edge="start"
+              color="inherit"
+              onClick={onToggleSidebar}
+              aria-label="Toggle sidebar"
+              sx={{ mr: 2 }}
+              data-testid="sidebar-toggle"
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+          
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Site Builder
           </Typography>
 
-          <Stack 
-            direction="row" 
-            spacing={1} 
-            alignItems="center"
-            sx={{ ml: 'auto' }}
-          >
-            <IconButton
-              onClick={undo}
-              disabled={!canUndo}
-              aria-label="Undo"
-              data-testid="undo-button"
-            >
-              <UndoIcon />
-            </IconButton>
-            
-            <IconButton
-              onClick={redo}
-              disabled={!canRedo}
-              aria-label="Redo"
-              data-testid="redo-button"
-            >
-              <RedoIcon />
-            </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Tooltip title="Undo (Ctrl+Z)">
+              <span>
+                <IconButton
+                  onClick={undo}
+                  disabled={!canUndo()}
+                  aria-label="Undo"
+                  data-testid="undo-button"
+                >
+                  <UndoIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
 
-            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+            <Tooltip title="Redo (Ctrl+Shift+Z)">
+              <span>
+                <IconButton
+                  onClick={redo}
+                  disabled={!canRedo()}
+                  aria-label="Redo"
+                  data-testid="redo-button"
+                >
+                  <RedoIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
 
             <Button
               startIcon={<SaveIcon />}
-              onClick={handleSave}
               variant="contained"
+              onClick={handleSave}
               size="small"
               data-testid="save-button"
             >
               Save
             </Button>
 
-            <Button
-              startIcon={<ResetIcon />}
-              onClick={() => setShowResetDialog(true)}
-              variant="outlined"
-              color="error"
-              size="small"
-              data-testid="reset-button"
-            >
-              Reset
-            </Button>
-          </Stack>
+            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
 
-          {lastSaved && (
-            <Typography 
-              variant="caption" 
-              color="text.secondary"
-              sx={{ ml: 2 }}
-              data-testid="last-saved"
-            >
-              Last saved • {lastSaved}
-            </Typography>
-          )}
+            <Tooltip title="Reset all changes">
+              <Button
+                startIcon={<ResetIcon />}
+                variant="outlined"
+                color="error"
+                onClick={() => setResetDialogOpen(true)}
+                size="small"
+                data-testid="reset-button"
+              >
+                Reset
+              </Button>
+            </Tooltip>
+
+            {lastSaved && (
+              <Typography 
+                variant="body2" 
+                color="text.secondary" 
+                sx={{ ml: 2, fontSize: '0.875rem' }}
+                data-testid="last-saved-indicator"
+              >
+                {formatLastSaved(lastSaved)}
+              </Typography>
+            )}
+          </Box>
         </Toolbar>
       </AppBar>
 
-      <ConfirmDialog
-        open={showResetDialog}
-        onClose={() => setShowResetDialog(false)}
-        onConfirm={handleReset}
-        title="Reset Site Builder"
-        description="This will reset all sections and theme settings. This action cannot be undone."
-        confirmText="Reset"
-        confirmColor="error"
-      />
+      <Dialog
+        open={resetDialogOpen}
+        onClose={() => setResetDialogOpen(false)}
+        aria-labelledby="reset-dialog-title"
+        data-testid="reset-dialog"
+      >
+        <DialogTitle id="reset-dialog-title">
+          Reset Site Builder
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to reset all changes? This will remove all sections and reset the theme to defaults. This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResetDialogOpen(false)} data-testid="reset-cancel">
+            Cancel
+          </Button>
+          <Button onClick={handleReset} color="error" variant="contained" data-testid="reset-confirm">
+            Reset
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

@@ -2,22 +2,18 @@
 
 import {
   Box,
+  Typography,
   Button,
-  Chip,
-  Drawer,
-  IconButton,
+  Card,
+  CardContent,
   List,
   ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
+  IconButton,
+  Chip,
   Menu,
   MenuItem,
-  Stack,
   TextField,
-  Typography,
-  useMediaQuery,
-  useTheme,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -25,39 +21,51 @@ import {
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
   MoreVert as MoreIcon,
-  Edit as EditIcon,
   ContentCopy as DuplicateIcon,
   Delete as DeleteIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
+  closestCenter,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
+  DragEndEvent,
 } from '@dnd-kit/core';
 import {
+  arrayMove,
   SortableContext,
-  useSortable,
+  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
 import { useSiteBuilderStore } from '@/store/siteBuilderStore';
-import { sectionKinds } from '@/lib/section-registry';
-import { SiteSection } from '@/types/site-builder';
+import { SectionKind } from '@/types/site-builder';
+
+const sectionKinds: { kind: SectionKind; label: string; description: string }[] = [
+  { kind: 'Hero', label: 'Hero', description: 'Main banner section' },
+  { kind: 'Story', label: 'Story', description: 'Tell your story' },
+  { kind: 'Events', label: 'Events', description: 'Display events' },
+  { kind: 'Gallery', label: 'Gallery', description: 'Photo gallery' },
+  { kind: 'FAQ', label: 'FAQ', description: 'Frequently asked questions' },
+  { kind: 'Contact', label: 'Contact', description: 'Contact information' },
+  { kind: 'Footer', label: 'Footer', description: 'Page footer' },
+];
 
 interface SortableSectionItemProps {
-  section: SiteSection;
+  section: any;
   isSelected: boolean;
   onSelect: () => void;
   onToggleVisibility: () => void;
-  onRename: (name: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onRename: (name: string) => void;
 }
 
 function SortableSectionItem({
@@ -65,13 +73,13 @@ function SortableSectionItem({
   isSelected,
   onSelect,
   onToggleVisibility,
-  onRename,
   onDuplicate,
   onDelete,
+  onRename,
 }: SortableSectionItemProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(section.name);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(section.name);
 
   const {
     attributes,
@@ -88,43 +96,19 @@ function SortableSectionItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const handleDoubleClick = () => {
-    setIsEditing(true);
-    setEditName(section.name);
-  };
-
   const handleRename = () => {
-    if (editName.trim()) {
-      onRename(editName.trim());
-    }
-    setIsEditing(false);
+    onRename(renameValue);
+    setIsRenaming(false);
+    setMenuAnchor(null);
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter') {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
       handleRename();
-    } else if (event.key === 'Escape') {
-      setIsEditing(false);
-      setEditName(section.name);
+    } else if (e.key === 'Escape') {
+      setIsRenaming(false);
+      setRenameValue(section.name);
     }
-  };
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleDuplicate = () => {
-    onDuplicate();
-    handleMenuClose();
-  };
-
-  const handleDelete = () => {
-    onDelete();
-    handleMenuClose();
   };
 
   return (
@@ -134,314 +118,310 @@ function SortableSectionItem({
       sx={{
         p: 0,
         mb: 1,
-        borderRadius: 2,
-        border: isSelected ? 2 : 1,
+        border: 1,
         borderColor: isSelected ? 'primary.main' : 'divider',
+        borderRadius: 2,
         bgcolor: isSelected ? 'primary.50' : 'background.paper',
+        cursor: 'pointer',
         '&:hover': {
           bgcolor: isSelected ? 'primary.100' : 'action.hover',
         },
       }}
+      onClick={onSelect}
+      data-testid={`section-item-${section.id}`}
     >
-      <ListItemButton
-        onClick={onSelect}
-        onDoubleClick={handleDoubleClick}
-        selected={isSelected}
-        sx={{ borderRadius: 2 }}
-      >
-        <ListItemIcon sx={{ minWidth: 32 }}>
-          <IconButton
-            size="small"
-            {...attributes}
-            {...listeners}
-            aria-label="Drag to reorder"
-            sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' } }}
-          >
-            <DragIcon fontSize="small" />
-          </IconButton>
-        </ListItemIcon>
+      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', p: 1 }}>
+        <IconButton
+          size="small"
+          {...attributes}
+          {...listeners}
+          sx={{ cursor: 'grab', mr: 1 }}
+          aria-label="Drag to reorder"
+          data-testid={`drag-handle-${section.id}`}
+        >
+          <DragIcon />
+        </IconButton>
 
-        <ListItemText
-          primary={
-            isEditing ? (
-              <TextField
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onBlur={handleRename}
-                onKeyDown={handleKeyDown}
-                size="small"
-                autoFocus
-                fullWidth
-                variant="standard"
-                sx={{ '& .MuiInput-underline:before': { borderBottom: 'none' } }}
-              />
-            ) : (
-              <Typography variant="body2" fontWeight={isSelected ? 600 : 400}>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleVisibility();
+          }}
+          sx={{ mr: 1 }}
+          aria-label={section.visible ? 'Hide section' : 'Show section'}
+          data-testid={`visibility-toggle-${section.id}`}
+        >
+          {section.visible ? <VisibilityIcon /> : <VisibilityOffIcon />}
+        </IconButton>
+
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          {isRenaming ? (
+            <TextField
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleRename}
+              onKeyDown={handleKeyDown}
+              size="small"
+              fullWidth
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`rename-input-${section.id}`}
+            />
+          ) : (
+            <>
+              <Typography
+                variant="body2"
+                component="div"
+                fontWeight={500}
+                sx={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setIsRenaming(true);
+                }}
+              >
                 {section.name}
               </Typography>
-            )
-          }
-          secondary={
-            <Chip
-              label={section.kind}
-              size="small"
-              variant="outlined"
-              sx={{ mt: 0.5, fontSize: '0.75rem', height: 20 }}
-            />
-          }
-        />
+              <Box sx={{ mt: 0.5 }}>
+                <Chip
+                  label={section.kind}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: '0.75rem', height: 20 }}
+                />
+              </Box>
+            </>
+          )}
+        </Box>
 
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleVisibility();
-            }}
-            aria-label={section.visible ? 'Hide section' : 'Show section'}
-          >
-            {section.visible ? <VisibilityIcon fontSize="small" /> : <VisibilityOffIcon fontSize="small" />}
-          </IconButton>
-
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleMenuOpen(e);
-            }}
-            aria-label="More options"
-          >
-            <MoreIcon fontSize="small" />
-          </IconButton>
-        </Stack>
-      </ListItemButton>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuAnchor(e.currentTarget);
+          }}
+          aria-label="Section options"
+          data-testid={`section-menu-${section.id}`}
+        >
+          <MoreIcon />
+        </IconButton>
+      </Box>
 
       <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={() => setMenuAnchor(null)}
+        onClick={(e) => e.stopPropagation()}
       >
-        <MenuItem onClick={() => setIsEditing(true)}>
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Rename</ListItemText>
+        <MenuItem
+          onClick={() => {
+            setIsRenaming(true);
+            setMenuAnchor(null);
+          }}
+          data-testid={`rename-option-${section.id}`}
+        >
+          <EditIcon sx={{ mr: 1 }} />
+          Rename
         </MenuItem>
-        <MenuItem onClick={handleDuplicate}>
-          <ListItemIcon>
-            <DuplicateIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Duplicate</ListItemText>
+        <MenuItem
+          onClick={() => {
+            onDuplicate();
+            setMenuAnchor(null);
+          }}
+          data-testid={`duplicate-option-${section.id}`}
+        >
+          <DuplicateIcon sx={{ mr: 1 }} />
+          Duplicate
         </MenuItem>
-        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
+        <MenuItem
+          onClick={() => {
+            onDelete();
+            setMenuAnchor(null);
+          }}
+          sx={{ color: 'error.main' }}
+          data-testid={`delete-option-${section.id}`}
+        >
+          <DeleteIcon sx={{ mr: 1 }} />
+          Delete
         </MenuItem>
       </Menu>
     </ListItem>
   );
 }
 
-interface SiteBuilderSidebarProps {
-  collapsible?: boolean;
-  mobile?: boolean;
-}
-
-export function SiteBuilderSidebar({ collapsible = false, mobile = false }: SiteBuilderSidebarProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  
+export function SiteBuilderSidebar() {
   const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
 
-  const sections = useSiteBuilderStore((s) => s.sections);
-  const selectedSectionId = useSiteBuilderStore((s) => s.selectedSectionId);
-  const addSection = useSiteBuilderStore((s) => s.addSection);
-  const selectSection = useSiteBuilderStore((s) => s.selectSection);
-  const updateSection = useSiteBuilderStore((s) => s.updateSection);
-  const deleteSection = useSiteBuilderStore((s) => s.deleteSection);
-  const duplicateSection = useSiteBuilderStore((s) => s.duplicateSection);
-  const reorderSections = useSiteBuilderStore((s) => s.reorderSections);
+  const {
+    sections,
+    selectedSectionId,
+    addSection,
+    removeSection,
+    duplicateSection,
+    reorderSections,
+    toggleSectionVisibility,
+    renameSection,
+    selectSection,
+  } = useSiteBuilderStore();
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
-  const handleAddSection = (kind: string) => {
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = sections.findIndex((section) => section.id === active.id);
+      const newIndex = sections.findIndex((section) => section.id === over.id);
+      reorderSections(oldIndex, newIndex);
+    }
+  };
+
+  const handleAddSection = (kind: SectionKind) => {
     addSection(kind);
     setAddMenuAnchor(null);
   };
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (over && active.id !== over.id) {
-      const oldIndex = sections.findIndex((section) => section.id === active.id);
-      const newIndex = sections.findIndex((section) => section.id === over.id);
-      
-      if (oldIndex !== -1 && newIndex !== -1) {
-        reorderSections(oldIndex, newIndex);
-      }
-    }
-    
-    setActiveId(null);
-  };
-
-  const getActiveSection = () => {
-    if (!activeId) return null;
-    return sections.find((section) => section.id === activeId);
-  };
-
-  const sortedSections = [...sections].sort((a, b) => a.order - b.order);
-
-  const sidebarContent = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+  if (sections.length === 0) {
+    return (
+      <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
           <Typography variant="h6" fontWeight={600}>
             Sections
           </Typography>
           <Button
+            ref={addButtonRef}
             startIcon={<AddIcon />}
-            onClick={(e) => setAddMenuAnchor(e.currentTarget)}
             variant="contained"
             size="small"
+            onClick={(e) => setAddMenuAnchor(e.currentTarget)}
             data-testid="add-section-button"
           >
             Add Section
           </Button>
-        </Stack>
-      </Box>
+        </Box>
 
-      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-        {sections.length === 0 ? (
-          <Box
-            sx={{
-              textAlign: 'center',
-              py: 6,
-              px: 3,
-              border: '2px dashed',
-              borderColor: 'divider',
-              borderRadius: 2,
-              bgcolor: 'background.default',
-            }}
-          >
-            <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+        <Card sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <CardContent sx={{ textAlign: 'center', py: 6 }}>
+            <Typography variant="h6" gutterBottom>
               No sections yet
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Add your first section to get started
+            <Typography color="text.secondary" sx={{ mb: 3 }}>
+              Add your first section to get started building your site.
             </Typography>
             <Button
               variant="contained"
+              startIcon={<AddIcon />}
               onClick={(e) => setAddMenuAnchor(e.currentTarget)}
               data-testid="add-first-section-button"
             >
-              Add your first section
+              Add first section
             </Button>
-          </Box>
-        ) : (
-            <DndContext
-              sensors={sensors}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
+          </CardContent>
+        </Card>
+
+        <Menu
+          anchorEl={addMenuAnchor}
+          open={Boolean(addMenuAnchor)}
+          onClose={() => setAddMenuAnchor(null)}
+          data-testid="add-section-menu"
+        >
+          {sectionKinds.map((kind) => (
+            <MenuItem
+              key={kind.kind}
+              onClick={() => handleAddSection(kind.kind)}
+              data-testid={`add-section-${kind.kind.toLowerCase()}`}
             >
-              <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                <List 
-                  sx={{ p: 0 }}
-                  role="list"
-                  aria-label="Sections list"
-                >
-                  {sortedSections.map((section) => (
-                    <SortableSectionItem
-                      key={section.id}
-                      section={section}
-                      isSelected={selectedSectionId === section.id}
-                      onSelect={() => selectSection(section.id)}
-                      onToggleVisibility={() => updateSection(section.id, { visible: !section.visible })}
-                      onRename={(name) => updateSection(section.id, { name })}
-                      onDuplicate={() => duplicateSection(section.id)}
-                      onDelete={() => deleteSection(section.id)}
-                    />
-                  ))}
-                </List>
-              </SortableContext>
-            <DragOverlay>
-              {activeId ? (
-                <Box
-                  sx={{
-                    p: 2,
-                    bgcolor: 'background.paper',
-                    borderRadius: 2,
-                    boxShadow: 3,
-                    transform: 'rotate(5deg)',
-                    opacity: 0.9,
-                  }}
-                >
-                  <Typography variant="body2" fontWeight={600}>
-                    {getActiveSection()?.name}
-                  </Typography>
-                </Box>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        )}
+              <Box>
+                <Typography variant="body2" fontWeight={500}>
+                  {kind.label}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {kind.description}
+                </Typography>
+              </Box>
+            </MenuItem>
+          ))}
+        </Menu>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h6" fontWeight={600}>
+          Sections
+        </Typography>
+        <Button
+          ref={addButtonRef}
+          startIcon={<AddIcon />}
+          variant="outlined"
+          size="small"
+          onClick={(e) => setAddMenuAnchor(e.currentTarget)}
+          data-testid="add-section-button"
+        >
+          Add Section
+        </Button>
+      </Box>
+
+      <Box sx={{ flex: 1, overflow: 'auto' }}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+            <List sx={{ p: 0 }} data-testid="sections-list">
+              {sections.map((section) => (
+                <SortableSectionItem
+                  key={section.id}
+                  section={section}
+                  isSelected={section.id === selectedSectionId}
+                  onSelect={() => selectSection(section.id)}
+                  onToggleVisibility={() => toggleSectionVisibility(section.id)}
+                  onDuplicate={() => duplicateSection(section.id)}
+                  onDelete={() => removeSection(section.id)}
+                  onRename={(name) => renameSection(section.id, name)}
+                />
+              ))}
+            </List>
+          </SortableContext>
+        </DndContext>
       </Box>
 
       <Menu
         anchorEl={addMenuAnchor}
         open={Boolean(addMenuAnchor)}
         onClose={() => setAddMenuAnchor(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        data-testid="add-section-menu"
       >
         {sectionKinds.map((kind) => (
           <MenuItem
-            key={kind.value}
-            onClick={() => handleAddSection(kind.value)}
-            data-testid={`add-section-${kind.value}`}
+            key={kind.kind}
+            onClick={() => handleAddSection(kind.kind)}
+            data-testid={`add-section-${kind.kind.toLowerCase()}`}
           >
-            <ListItemText
-              primary={kind.label}
-              secondary={kind.description}
-            />
+            <Box>
+              <Typography variant="body2" fontWeight={500}>
+                {kind.label}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {kind.description}
+              </Typography>
+            </Box>
           </MenuItem>
         ))}
       </Menu>
     </Box>
-  );
-
-  if (mobile) {
-    return sidebarContent;
-  }
-
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: 320,
-        flexShrink: 0,
-        '& .MuiDrawer-paper': {
-          width: 320,
-          boxSizing: 'border-box',
-          borderRight: 1,
-          borderColor: 'divider',
-        },
-      }}
-    >
-      {sidebarContent}
-    </Drawer>
   );
 }
